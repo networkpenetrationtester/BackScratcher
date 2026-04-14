@@ -1,0 +1,16 @@
+{
+  "dependencies": {
+    "@types/node": "^25.6.0",
+    "axios": "^1.15.0"
+  },
+  "name": "waybackscrape",
+  "version": "1.0.0",
+  "description": "",
+  "main": "index.js",
+  "type": "module",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "author": "",
+  "license": "ISC"
+}
