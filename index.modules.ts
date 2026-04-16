@@ -42,7 +42,6 @@ export async function URLListLoader(target_url: string, timemap: $WaybackTimeMap
         (() => { // maybe make this user-specified?
             let latest_resources = new Map<String, { version: number, wayback_url: string, downloaded?: boolean }>();
             for (let t of timemap) {
-                // possible implementation of URL.parse?
                 let wayback_url = `https://web.archive.org/web/${t.timestamp}/${t.original}`;
                 let parts = t.original.split('?v=');
                 let [url, version] = [parts[0], parseInt(parts[1])];
@@ -60,10 +59,6 @@ export async function URLListLoader(target_url: string, timemap: $WaybackTimeMap
                 }
             }
             return Array.from(latest_resources.values());
-            //.map(value => {
-            // value.downloaded = false;
-            // return value;
-            // });
         })();
     !urllist_exists && fs.mkdirSync(path.dirname(urllist_path), { recursive: true });
     !urllist_exists && fs.writeFileSync(urllist_path, JSON.stringify(urllist), { encoding: 'utf-8' });
@@ -181,7 +176,6 @@ export function TryFindGoodPrefixDate(sparkline: $WaybackSparkLineObject) { // r
         month: 'none',
         month_captures: 0
     }
-
     for (let year_key of Object.keys(sparkline.status)) {
         let monthly_statuses = sparkline.status[year_key];
         let monthly_capture_count = sparkline.years[year_key];
@@ -189,7 +183,6 @@ export function TryFindGoodPrefixDate(sparkline: $WaybackSparkLineObject) { // r
         for (let i = 0; i < 12; i++) {
             if (monthly_statuses[i] === '2') month_indicies_2xx.push(i);
         }
-
         for (let month_key of month_indicies_2xx) {
             let month_capture_count = monthly_capture_count[month_key];
             if (month_capture_count > best.month_captures) { // the reasoning behind this is that the values given to us are only a summary, so we should look for the month containing the most captures as it statistically holds the most 2xxs
@@ -201,22 +194,18 @@ export function TryFindGoodPrefixDate(sparkline: $WaybackSparkLineObject) { // r
             }
         }
     }
-
     if (best.year === 'none' || best.month === 'none' || best.month_captures === 0) return 'none';
     return best.year + best.month;
 }
 
 export async function TryFindGoodCaptureURL(target_url: string, date_prefix: string) {
     if (date_prefix === 'none') return null;
-
     let days: $WaybackCalendarCaptureByDay = await GetWaybackCalendarCapture(target_url, date_prefix, 'day');
-
     for (let day of days.items) {
         if (day[1] === 200) {
             return `https://web.archive.org/web/${date_prefix}${day[0]}/${target_url}`;
         }
     }
-
     return 'none';
 }
 
@@ -239,18 +228,15 @@ export async function RetryFailedRequest(target_url: string): Promise<Buffer<Arr
 export async function BulkDownloader(target_url: string, urllist: $URLListObject[], downloaded_urllist: String[], failed_urllist: String[], interval = 1000) {
     for (let url_obj of urllist) {
         let url = url_obj.wayback_url;
-
         if (downloaded_urllist.includes(url) || failed_urllist.includes(url)) {
             console.log(`Skipping ${url}`);
             continue;
         }
-
         let res: Buffer | null = null;
         console.log(`Fetching ${url}...`);
         let true_url = url.match(wayback_regex)?.groups?.resource ?? 'fail';
         let url_test = URL.parse(true_url);
         if (true_url == 'fail' || !url_test) continue;
-
         try {
             res = await FetchWrapper(url, {
                 handler: async (res) => Buffer.from(await res.arrayBuffer())
@@ -260,7 +246,6 @@ export async function BulkDownloader(target_url: string, urllist: $URLListObject
             console.log(`Retrying ${url}...`);
             res = await RetryFailedRequest(url);
         }
-
         if (res instanceof Buffer) {
             let resource_output_path = path.join(DIR(), 'web', url_test?.hostname ?? 'dev', url_test?.pathname ?? 'null'); // add some form of 'target_url' between web and the actual resource to split by domains
             console.log(`Writing ${resource_output_path}`);
@@ -269,7 +254,6 @@ export async function BulkDownloader(target_url: string, urllist: $URLListObject
         } else {
             fs.appendFileSync(path.join(DIR(), 'records', encodeURIComponent(target_url), 'failed_urllist.txt'), failed_urllist.length > 0 ? '\n' + url : url);
         }
-
         await Delay(interval);
     }
 }
