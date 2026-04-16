@@ -1,6 +1,6 @@
 import fs from 'node:fs'
 import path from 'path';
-import type { $WaybackTimeMapObject, $URLListObject, $ResponseHandlerArgs } from './index.types.ts';
+import type { $WaybackTimeMapObject, $URLListObject, $ResponseHandlerArgs, $WaybackSparkLineObject, $WaybackCalendarCaptureByDay } from './index.types.ts';
 
 export const DIR = () => import.meta.dirname;
 
@@ -101,7 +101,7 @@ export async function FailedURLListLoader(target_url: string) {
 
 export async function FetchWrapper(url: string, args: $ResponseHandlerArgs): Promise<any> {
     let res = await fetch(url, args.options ?? {});
-    if (res.status !== 200) throw new Error(`${res.status}#${res.statusText}#${res.url}`);
+    if (res.status !== 200) throw new Error(`${res.status}_${res.statusText.replace(/ /g, '_')}: ${res.url}`);
     return args.handler ? await args.handler(res) : res;
 }
 
@@ -126,8 +126,8 @@ export async function GetWaybackSparkline(url: string, output = 'json', collecti
     return data;
 }
 
-export async function GetWaybackCalendarCapture(url: string, date: string, group_by = 'day',) {
-    let data = await FetchWrapper(`https://web.archive.org/__wb/calendarcaptures/2?url=${url}&date=${date}&groupby=${group_by}`, {
+export async function GetWaybackCalendarCapture(url: string, date: string, group_by: 'day' | 'collection' | 'none' = 'none') {
+    let data = await FetchWrapper(`https://web.archive.org/__wb/calendarcaptures/2?url=${url}&date=${date}${group_by != 'none' ? '&groupby=' + group_by : ''}`, {
         options: wayback_fetch_options,
         handler: wayback_fetch_handler
     });
@@ -158,7 +158,7 @@ export async function GetWaybackTimemap
                         endtimestamp,
                         groupcount,
                         uniqcount
-                    ] = sup;
+                    ] = Object.values(sup);
                     return {
                         original: original,
                         mimetype: mimetype,
@@ -175,35 +175,101 @@ export async function GetWaybackTimemap
     return data;
 }
 
-export async function BulkDownloader(urllist: $URLListObject[], downloaded_urllist: String[], failed_urllist: String[], interval = 1000) {
+export function TryFindGoodPrefixDate(sparkline: $WaybackSparkLineObject) { // retard compiler hacks
+    let best = {
+        year: 'none',
+        month: 'none',
+        month_captures: 0
+    }
+
+    for (let year_key of Object.keys(sparkline.status)) {
+        let monthly_statuses = sparkline.status[year_key];
+        let monthly_capture_count = sparkline.years[year_key];
+        let month_indicies_2xx = new Array<number>();
+        for (let i = 0; i < 12; i++) {
+            if (monthly_statuses[i] === '2') month_indicies_2xx.push(i);
+        }
+
+        for (let month_key of month_indicies_2xx) {
+            let month_capture_count = monthly_capture_count[month_key];
+            if (month_capture_count > best.month_captures) { // the reasoning behind this is that the values given to us are only a summary, so we should look for the month containing the most captures as it statistically holds the most 2xxs
+                best = {
+                    month_captures: month_capture_count,
+                    year: year_key,
+                    month: (month_key + 1).toString().padStart(2, '0')
+                };
+            }
+        }
+    }
+
+    if (best.year === 'none' || best.month === 'none' || best.month_captures === 0) return 'none';
+    return best.year + best.month;
+}
+
+export async function TryFindGoodCaptureURL(target_url: string, date_prefix: string) {
+    if (date_prefix === 'none') return null;
+
+    let days: $WaybackCalendarCaptureByDay = await GetWaybackCalendarCapture(target_url, date_prefix, 'day');
+
+    for (let day of days.items) {
+        if (day[1] === 200) {
+            return `https://web.archive.org/web/${date_prefix}${day[0]}/${target_url}`;
+        }
+    }
+
+    return 'none';
+}
+
+export async function RetryFailedRequest(target_url: string): Promise<Buffer<ArrayBufferLike> | null> {
+    let sparkline: $WaybackSparkLineObject = await GetWaybackSparkline(target_url);
+    // console.log(sparkline);
+    let good_prefix = TryFindGoodPrefixDate(sparkline);
+    // console.log(good_prefix);
+    let good_url = await TryFindGoodCaptureURL(target_url, good_prefix);
+    // console.log(good_url);
+    if (good_url) {
+        let res = await FetchWrapper(good_url, {
+            handler: async (res) => Buffer.from(await res.arrayBuffer())
+        });
+        if (res instanceof Buffer) return res;
+    }
+    return null;
+}
+
+export async function BulkDownloader(target_url: string, urllist: $URLListObject[], downloaded_urllist: String[], failed_urllist: String[], interval = 1000) {
     for (let url_obj of urllist) {
         let url = url_obj.wayback_url;
+
         if (downloaded_urllist.includes(url) || failed_urllist.includes(url)) {
             console.log(`Skipping ${url}`);
             continue;
         }
-        console.log(`Fetching ${url}`);
+
+        let res: Buffer | null = null;
+        console.log(`Fetching ${url}...`);
+        let true_url = url.match(wayback_regex)?.groups?.resource ?? '';
+        let url_test = URL.parse(true_url);
+        if (!url_test) continue;
+
         try {
-            let url_test = URL.parse(url);
-            if (!url_test) continue;
-            console.log(url_test);
-            // let res = await FetchWrapper(url, {
-            //     handler: async (res) => Buffer.from(await res.arrayBuffer())
-            // });
-            // if (res instanceof Buffer) continue{
-            // let r = url.match(wayback_regex);
-            // let groups = r?.groups;
-            // if (groups) {
-            //     let resource = groups.resource.split('?')[0];
-            //     let resource_output_path = path.join(DIR(), 'web', resource.split(TARGET_URL)[1]); // add some form of 'target_url' between web and the actual resource to split by domains
-            //     console.log(`Writing ${resource_output_path}`);
-            //     fs.writeFileSync(resource_output_path, res);
-            //     fs.appendFileSync(path.join(DIR(), 'downloaded_urllist.txt'), downloaded_urllist.length > 0 ? '\n' + url : url);
-            // }
-            // }
+            res = await FetchWrapper(url, {
+                handler: async (res) => Buffer.from(await res.arrayBuffer())
+            });
         } catch (e) {
-            fs.appendFileSync(path.join(DIR(), 'failed_urllist.txt'), failed_urllist.length > 0 ? '\n' + url : url);
+            console.error(e);
+            console.log(`Retrying ${url}...`);
+            res = await RetryFailedRequest(url);
         }
+
+        if (res instanceof Buffer) {
+            let resource_output_path = path.join(DIR(), 'web', url_test?.hostname ?? 'dev', url_test?.pathname ?? 'null'); // add some form of 'target_url' between web and the actual resource to split by domains
+            console.log(`Writing ${resource_output_path}`);
+            fs.writeFileSync(resource_output_path, res);
+            fs.appendFileSync(path.join(DIR(), 'records', encodeURIComponent(target_url), 'downloaded_urllist.txt'), downloaded_urllist.length > 0 ? '\n' + url : url);
+        } else {
+            fs.appendFileSync(path.join(DIR(), 'records', encodeURIComponent(target_url), 'failed_urllist.txt'), failed_urllist.length > 0 ? '\n' + url : url);
+        }
+
         await Delay(interval);
     }
 }

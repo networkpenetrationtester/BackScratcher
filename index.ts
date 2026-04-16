@@ -28,7 +28,7 @@ async function main() {
         let failed_urllist = await FailedURLListLoader(href);
         let urllist = await URLListLoader(href, timemap);
 
-        await BulkDownloader(urllist, downloaded_urllist, failed_urllist, 1000);
+        await BulkDownloader(query, urllist, downloaded_urllist, failed_urllist, 1000);
     }
 }
 
