@@ -247,9 +247,9 @@ export async function BulkDownloader(target_url: string, urllist: $URLListObject
 
         let res: Buffer | null = null;
         console.log(`Fetching ${url}...`);
-        let true_url = url.match(wayback_regex)?.groups?.resource ?? '';
+        let true_url = url.match(wayback_regex)?.groups?.resource ?? 'fail';
         let url_test = URL.parse(true_url);
-        if (!url_test) continue;
+        if (true_url == 'fail' || !url_test) continue;
 
         try {
             res = await FetchWrapper(url, {
