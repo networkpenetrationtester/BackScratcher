@@ -101,7 +101,7 @@ export async function FetchWrapper(url: string, args: $ResponseHandlerArgs): Pro
 }
 
 export async function Delay(ms: number) {
-    console.log(`Waiting ${ms}ms...`);
+    // console.log(`Waiting: ${ms}ms...`);
     return await new Promise((resolve) => { setTimeout(resolve, ms) });
 }
 
@@ -215,7 +215,7 @@ export async function RetryFailedRequest(target_url: string): Promise<Buffer<Arr
     let good_prefix = TryFindGoodPrefixDate(sparkline);
     // console.log(good_prefix);
     let good_url = await TryFindGoodCaptureURL(target_url, good_prefix);
-    // console.log(good_url);
+    console.log(`Found reported 2xx: ${good_url}...`);
     if (good_url) {
         let res = await FetchWrapper(good_url, {
             handler: async (res) => Buffer.from(await res.arrayBuffer())
@@ -228,12 +228,15 @@ export async function RetryFailedRequest(target_url: string): Promise<Buffer<Arr
 export async function BulkDownloader(target_url: string, urllist: $URLListObject[], downloaded_urllist: String[], failed_urllist: String[], interval = 1000) {
     for (let url_obj of urllist) {
         let url = url_obj.wayback_url;
-        if (downloaded_urllist.includes(url) || failed_urllist.includes(url)) {
-            console.log(`Skipping ${url}`);
+        let already_requested = downloaded_urllist.includes(url);
+        let failed_request = failed_urllist.includes(url);
+        if (already_requested || failed_request) {
+            already_requested && console.log(`Skipping: ${url}... (Already Finished)`);
+            failed_request && console.log(`Skipping: ${url}... (Failed)`);
             continue;
         }
         let res: Buffer | null = null;
-        console.log(`Fetching ${url}...`);
+        console.log(`Fetching: ${url}...`);
         let true_url = url.match(wayback_regex)?.groups?.resource ?? 'fail';
         let url_test = URL.parse(true_url);
         if (true_url == 'fail' || !url_test) continue;
@@ -243,12 +246,13 @@ export async function BulkDownloader(target_url: string, urllist: $URLListObject
             });
         } catch (e) {
             console.error(e);
-            console.log(`Retrying ${url}...`);
+            console.log(`Retrying: ${url}...`);
             res = await RetryFailedRequest(url);
         }
         if (res instanceof Buffer) {
             let resource_output_path = path.join(DIR(), 'web', url_test?.hostname ?? 'dev', url_test?.pathname ?? 'null'); // add some form of 'target_url' between web and the actual resource to split by domains
-            console.log(`Writing ${resource_output_path}`);
+            console.log(`Writing: ${resource_output_path}...`);
+            if (!fs.existsSync(resource_output_path)) fs.mkdirSync(path.dirname(resource_output_path), { recursive: true });
             fs.writeFileSync(resource_output_path, res);
             fs.appendFileSync(path.join(DIR(), 'records', encodeURIComponent(target_url), 'downloaded_urllist.txt'), downloaded_urllist.length > 0 ? '\n' + url : url);
         } else {

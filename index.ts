@@ -16,7 +16,8 @@ async function main() {
         });
 
         if (!query) continue;
-        if (query == '!e') process.exit(0);
+        if (query == 'exit') process.exit(0);
+        if (query == 'clear') console.clear();
         // add more rules here
 
         let target_url = URL.parse(query);
