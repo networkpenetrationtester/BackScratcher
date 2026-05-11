@@ -11,10 +11,6 @@ export interface $WaybackDatbaseInterfaceArguments {
     logger?: $WaybackDatbaseInterfaceLogger
 }
 
-/**
- * only required param should be url by default, or allow Connect() to do the same thing as it does with names~
- */
-
 export class WaybackDatabaseInterface {
     public db!: BetterSQLite3.Database;
     private connected = false;
@@ -140,31 +136,3 @@ export class WaybackDatabaseInterface {
         this.db.transaction(() => this.ADD_RESOURCE_STATEMENT.run(resource_obj))();
     }
 }
-
-let intf = new WaybackDatabaseInterface();
-let db = intf.Connect()
-
-// for (let dick = 0; dick < 10; dick++) {
-//     let penis = circlejerk.Connect('https://www.dick' + dick + '-dickly.com');
-//     if (penis instanceof Database) {
-//         for (let rounds = 0; rounds < 2; rounds++) {
-//             for (let strokes = 0; strokes < 10; strokes++) {
-//                 let pp = `/appi/?dick=${dick}&round=${rounds}&stroke=${strokes}`
-
-//                 let edging: $WaybackDatabaseProgressObject = { // 1 stroke
-//                     path: pp,
-//                     failure: dick % 2 // did you cum early?
-//                 };
-
-//                 let hard = circlejerk.AddOrIgnoreProgress(edging); // check edging
-
-//                 if (!hard || edging.failure) continue; // stroking
-
-//                 circlejerk.AddOrIgnoreResource({
-//                     path: pp,
-//                     data: Buffer.from('THE PENIS IN MY BUTT') // takes buffers like they take dicks
-//                 });
-//             }
-//         }
-//     }
-// }
