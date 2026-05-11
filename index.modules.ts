@@ -19,7 +19,7 @@ export const wayback_fetch_options: RequestInit = {
 export const wayback_fetch_handler = async (res: Response) => { let r = await res.text(); try { let r_test = JSON.parse(r); return r_test; } catch { return r; } };
 
 export async function TimeMapLoader(target_url: string): Promise<$WaybackTimeMapObject[]> {
-    let timemap_path = path.join(DIR(), 'records', encodeURIComponent(target_url), 'timemap.json');
+    let timemap_path = path.join('.', 'records', encodeURIComponent(target_url), 'timemap.json');
     let timemap_exists = fs.existsSync(timemap_path);
     let timemap = timemap_exists
         ?
@@ -33,7 +33,7 @@ export async function TimeMapLoader(target_url: string): Promise<$WaybackTimeMap
 };
 
 export async function URLListLoader(target_url: string, timemap: $WaybackTimeMapObject[]): Promise<$URLListObject[]> {
-    let urllist_path = path.join(DIR(), 'records', encodeURIComponent(target_url), 'urllist.json');
+    let urllist_path = path.join('.', 'records', encodeURIComponent(target_url), 'urllist.json');
     let urllist_exists = fs.existsSync(urllist_path);
     let urllist = urllist_exists
         ?
@@ -66,7 +66,7 @@ export async function URLListLoader(target_url: string, timemap: $WaybackTimeMap
 };
 
 export async function DownloadedURLListLoader(target_url: string) {
-    let downloaded_path = path.join(DIR(), 'records', encodeURIComponent(target_url), 'downloaded_urllist.txt');
+    let downloaded_path = path.join('.', 'records', encodeURIComponent(target_url), 'downloaded_urllist.txt');
     let downloaded_exists = fs.existsSync(downloaded_path);
     let downloaded = downloaded_exists
         ?
@@ -81,7 +81,7 @@ export async function DownloadedURLListLoader(target_url: string) {
 }
 
 export async function FailedURLListLoader(target_url: string) {
-    let errors_path = path.join(DIR(), 'records', encodeURIComponent(target_url), 'failed_urllist.txt');
+    let errors_path = path.join('.', 'records', encodeURIComponent(target_url), 'failed_urllist.txt');
     let errors_exists = fs.existsSync(errors_path);
     let errors = errors_exists
         ?
@@ -225,39 +225,51 @@ export async function RetryFailedRequest(target_url: string): Promise<Buffer<Arr
     return null;
 }
 
-export async function BulkDownloader(target_url: string, urllist: $URLListObject[], downloaded_urllist: String[], failed_urllist: String[], interval = 1000) {
+export async function BulkDownloader(href: string, urllist: $URLListObject[], downloaded_urllist: String[], failed_urllist: String[], interval = 1000, retry = true) {
     for (let url_obj of urllist) {
         let url = url_obj.wayback_url;
         let already_requested = downloaded_urllist.includes(url);
         let failed_request = failed_urllist.includes(url);
         if (already_requested || failed_request) {
-            already_requested && console.log(`Skipping: ${url}... (Already Finished)`);
-            failed_request && console.log(`Skipping: ${url}... (Failed)`);
+            // already_requested && console.log(`Skipping: ${url}... (Already Finished)`);
+            // failed_request && console.log(`Skipping: ${url}... (Failed)`);
             continue;
         }
         let res: Buffer | null = null;
-        console.log(`Fetching: ${url}...`);
+        // console.log(`Fetching: ${url}...`);
         let true_url = url.match(wayback_regex)?.groups?.resource ?? 'fail';
         let url_test = URL.parse(true_url);
         if (true_url == 'fail' || !url_test) continue;
-        try {
-            res = await FetchWrapper(url, {
-                handler: async (res) => Buffer.from(await res.arrayBuffer())
-            });
-        } catch (e) {
-            console.error(e);
-            console.log(`Retrying: ${url}...`);
-            res = await RetryFailedRequest(url);
-        }
-        if (res instanceof Buffer) {
-            let resource_output_path = path.join(DIR(), 'web', url_test?.hostname ?? 'dev', url_test?.pathname ?? 'null'); // add some form of 'target_url' between web and the actual resource to split by domains
-            console.log(`Writing: ${resource_output_path}...`);
-            if (!fs.existsSync(resource_output_path)) fs.mkdirSync(path.dirname(resource_output_path), { recursive: true });
-            fs.writeFileSync(resource_output_path, res);
-            fs.appendFileSync(path.join(DIR(), 'records', encodeURIComponent(target_url), 'downloaded_urllist.txt'), downloaded_urllist.length > 0 ? '\n' + url : url);
-        } else {
-            fs.appendFileSync(path.join(DIR(), 'records', encodeURIComponent(target_url), 'failed_urllist.txt'), failed_urllist.length > 0 ? '\n' + url : url);
-        }
-        await Delay(interval);
+
+        // console.log(true_url);
+
+        // try {
+        //     res = await FetchWrapper(url, {
+        //         handler: async (res) => Buffer.from(await res.arrayBuffer())
+        //     });
+        // } catch (e) {
+        //     console.error(e);
+        //     console.log(`Retrying: ${url}...`);
+        //     res = await RetryFailedRequest(url);
+        // }
+        // if (res instanceof Buffer) {
+        //     let resource_output_path = path.join('.', 'web', url_test?.hostname ?? 'dev', url_test?.pathname ?? 'null'); // add some form of 'target_url' between web and the actual resource to split by domains
+        //     console.log(`Writing: ${resource_output_path}...`);
+        //     if (!fs.existsSync(resource_output_path)) fs.mkdirSync(path.dirname(resource_output_path), { recursive: true });
+        //     fs.writeFileSync(resource_output_path, res);
+        //     fs.appendFileSync(path.join('.', 'records', encodeURIComponent(href), 'downloaded_urllist.txt'), downloaded_urllist.length > 0 ? '\n' + url : url);
+        // } else {
+        //     fs.appendFileSync(path.join('.', 'records', encodeURIComponent(href), 'failed_urllist.txt'), failed_urllist.length > 0 ? '\n' + url : url);
+        // }
+        // await Delay(interval);
     }
+}
+
+export async function DownloaderWrapper(href: string, retry = true) {
+    let timemap = await TimeMapLoader(href);
+    let downloaded_urllist = await DownloadedURLListLoader(href);
+    let failed_urllist = await FailedURLListLoader(href);
+    let urllist = await URLListLoader(href, timemap);
+
+    await BulkDownloader(href, urllist, downloaded_urllist, failed_urllist, 1000, retry);
 }

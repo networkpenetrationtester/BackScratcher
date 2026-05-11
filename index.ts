@@ -1,4 +1,4 @@
-import { TimeMapLoader, DownloadedURLListLoader, FailedURLListLoader, URLListLoader, BulkDownloader } from "./index.modules.ts";
+import { TimeMapLoader, DownloadedURLListLoader, FailedURLListLoader, URLListLoader, BulkDownloader, DownloaderWrapper } from "./index.modules.ts";
 import rl from 'node:readline';
 import { URL } from "node:url";
 
@@ -18,18 +18,12 @@ async function main() {
         if (!query) continue;
         if (query == 'exit') process.exit(0);
         if (query == 'clear') console.clear();
-        // add more rules here
 
         let target_url = URL.parse(query);
         if (!target_url) continue;
-        let href = target_url.href;
 
-        let timemap = await TimeMapLoader(href);
-        let downloaded_urllist = await DownloadedURLListLoader(href);
-        let failed_urllist = await FailedURLListLoader(href);
-        let urllist = await URLListLoader(href, timemap);
-
-        await BulkDownloader(query, urllist, downloaded_urllist, failed_urllist, 1000);
+        await DownloaderWrapper(target_url.href);
+        // add more rules here
     }
 }
 
