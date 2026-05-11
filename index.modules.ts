@@ -1,8 +1,6 @@
 import fs from 'node:fs'
 import path from 'path';
-import type { $WaybackTimeMapObject, $URLListObject, $ResponseHandlerArgs, $WaybackSparkLineObject, $WaybackCalendarCaptureByDay } from './index.types.ts';
-
-export const DIR = () => import.meta.dirname;
+import type { $WaybackTimeMapObject, $URLListObject, $ResponseHandlerArguments, $WaybackSparkLineObject, $WaybackCalendarCaptureByDay } from './index.types.ts';
 
 export const wayback_regex = /(?!(https:\/\/web.archive.org))(?<collection>\/web\/[0-9]{14}\/)(?<resource>.*)/;
 
@@ -12,11 +10,58 @@ export const wayback_fetch_options: RequestInit = {
         'cache-control': 'no-cache',
         'pragma': 'no-cache'
     },
-    referrer: 'https://web.archive.org/', // lies :3
+    referrer: 'https://web.archive.org/', // without this lie it doesn't work :3
     method: 'GET'
 }
 
-export const wayback_fetch_handler = async (res: Response) => { let r = await res.text(); try { let r_test = JSON.parse(r); return r_test; } catch { return r; } };
+export const wayback_fetch_handler = async (res: Response) => {
+    let r = await res.text();
+    try {
+        return JSON.parse(r);
+    } catch {
+        return r;
+    }
+};
+
+export async function FetchWrapper(url: string, args: $ResponseHandlerArguments): Promise<any> {
+    let res = await fetch(url, args.options ?? {});
+    if (res.status !== 200) throw new Error(`${res.status}_${res.statusText.replace(/ /g, '_')}: ${res.url}`);
+    return args.handler ? await args.handler(res) : res;
+}
+
+export async function Delay(ms: number) {
+    console.log(`Waiting: ${ms}ms...`);
+    return await new Promise((resolve) => { setTimeout(resolve, ms) });
+}
+
+// export async function DownloadedURLListLoader(target_url: string) {
+//     let downloaded_path = path.join('.', 'records', encodeURIComponent(target_url), 'downloaded_urllist.txt');
+//     let downloaded_exists = fs.existsSync(downloaded_path);
+//     let downloaded = downloaded_exists
+//         ?
+//         fs.readFileSync(downloaded_path, { encoding: 'utf-8' }).split('\n')
+//         :
+//         new Array<String>()
+//         ;
+//     !downloaded_exists && fs.mkdirSync(path.dirname(downloaded_path), { recursive: true });
+//     !downloaded_exists && fs.writeFileSync(downloaded_path, '', { encoding: 'utf-8' });
+//     return downloaded;
+
+// }
+
+// export async function FailedURLListLoader(target_url: string) {
+//     let errors_path = path.join('.', 'records', encodeURIComponent(target_url), 'failed_urllist.txt');
+//     let errors_exists = fs.existsSync(errors_path);
+//     let errors = errors_exists
+//         ?
+//         fs.readFileSync(errors_path, { encoding: 'utf-8' }).split('\n')
+//         :
+//         new Array<String>()
+//         ;
+//     !errors_exists && fs.mkdirSync(path.dirname(errors_path), { recursive: true });
+//     !errors_exists && fs.writeFileSync(errors_path, '', { encoding: 'utf-8' });
+//     return errors;
+// }
 
 export async function TimeMapLoader(target_url: string): Promise<$WaybackTimeMapObject[]> {
     let timemap_path = path.join('.', 'records', encodeURIComponent(target_url), 'timemap.json');
@@ -39,7 +84,7 @@ export async function URLListLoader(target_url: string, timemap: $WaybackTimeMap
         ?
         JSON.parse(fs.readFileSync(urllist_path, { encoding: 'utf-8' }))
         :
-        (() => { // maybe make this user-specified?
+        (() => { // maybe make this user-specified to find a specific thing??
             let latest_resources = new Map<String, { version: number, wayback_url: string, downloaded?: boolean }>();
             for (let t of timemap) {
                 let wayback_url = `https://web.archive.org/web/${t.timestamp}/${t.original}`;
@@ -64,46 +109,6 @@ export async function URLListLoader(target_url: string, timemap: $WaybackTimeMap
     !urllist_exists && fs.writeFileSync(urllist_path, JSON.stringify(urllist), { encoding: 'utf-8' });
     return urllist;
 };
-
-export async function DownloadedURLListLoader(target_url: string) {
-    let downloaded_path = path.join('.', 'records', encodeURIComponent(target_url), 'downloaded_urllist.txt');
-    let downloaded_exists = fs.existsSync(downloaded_path);
-    let downloaded = downloaded_exists
-        ?
-        fs.readFileSync(downloaded_path, { encoding: 'utf-8' }).split('\n')
-        :
-        new Array<String>()
-        ;
-    !downloaded_exists && fs.mkdirSync(path.dirname(downloaded_path), { recursive: true });
-    !downloaded_exists && fs.writeFileSync(downloaded_path, '', { encoding: 'utf-8' });
-    return downloaded;
-
-}
-
-export async function FailedURLListLoader(target_url: string) {
-    let errors_path = path.join('.', 'records', encodeURIComponent(target_url), 'failed_urllist.txt');
-    let errors_exists = fs.existsSync(errors_path);
-    let errors = errors_exists
-        ?
-        fs.readFileSync(errors_path, { encoding: 'utf-8' }).split('\n')
-        :
-        new Array<String>()
-        ;
-    !errors_exists && fs.mkdirSync(path.dirname(errors_path), { recursive: true });
-    !errors_exists && fs.writeFileSync(errors_path, '', { encoding: 'utf-8' });
-    return errors;
-}
-
-export async function FetchWrapper(url: string, args: $ResponseHandlerArgs): Promise<any> {
-    let res = await fetch(url, args.options ?? {});
-    if (res.status !== 200) throw new Error(`${res.status}_${res.statusText.replace(/ /g, '_')}: ${res.url}`);
-    return args.handler ? await args.handler(res) : res;
-}
-
-export async function Delay(ms: number) {
-    // console.log(`Waiting: ${ms}ms...`);
-    return await new Promise((resolve) => { setTimeout(resolve, ms) });
-}
 
 export async function GetWaybackHost(url: string) {
     let data = await FetchWrapper(`https://web.archive.org/__wb/search/host?q=${url}`, {
@@ -211,9 +216,7 @@ export async function TryFindGoodCaptureURL(target_url: string, date_prefix: str
 
 export async function RetryFailedRequest(target_url: string): Promise<Buffer<ArrayBufferLike> | null> {
     let sparkline: $WaybackSparkLineObject = await GetWaybackSparkline(target_url);
-    // console.log(sparkline);
     let good_prefix = TryFindGoodPrefixDate(sparkline);
-    // console.log(good_prefix);
     let good_url = await TryFindGoodCaptureURL(target_url, good_prefix);
     console.log(`Found reported 2xx: ${good_url}...`);
     if (good_url) {
@@ -230,18 +233,25 @@ export async function BulkDownloader(href: string, urllist: $URLListObject[], do
         let url = url_obj.wayback_url;
         let already_requested = downloaded_urllist.includes(url);
         let failed_request = failed_urllist.includes(url);
-        if (already_requested || failed_request) {
-            // already_requested && console.log(`Skipping: ${url}... (Already Finished)`);
-            // failed_request && console.log(`Skipping: ${url}... (Failed)`);
+
+        if (already_requested) {
+            console.log(`Skipping: ${url}... (Already Finished)`);
             continue;
         }
-        let res: Buffer | null = null;
-        // console.log(`Fetching: ${url}...`);
-        let true_url = url.match(wayback_regex)?.groups?.resource ?? 'fail';
-        let url_test = URL.parse(true_url);
-        if (true_url == 'fail' || !url_test) continue;
 
-        // console.log(true_url);
+        if (failed_request) {
+            console.log(`Skipping: ${url}... (Failed)`);
+            continue;
+        }
+
+        let res: Buffer | null = null;
+        let orig_url = url.match(wayback_regex)?.groups?.resource;
+        let parsed_url = URL.parse(orig_url ?? '');
+
+        if (!parsed_url) continue;
+
+        console.log(parsed_url.host, parsed_url.pathname);
+        process.exit(0);
 
         // try {
         //     res = await FetchWrapper(url, {
@@ -265,7 +275,7 @@ export async function BulkDownloader(href: string, urllist: $URLListObject[], do
     }
 }
 
-export async function DownloaderWrapper(href: string, retry = true) {
+export async function BulkDownloaderWrapper(href: string, retry = true) {
     let timemap = await TimeMapLoader(href);
     let downloaded_urllist = await DownloadedURLListLoader(href);
     let failed_urllist = await FailedURLListLoader(href);

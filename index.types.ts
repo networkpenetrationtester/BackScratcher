@@ -4,6 +4,11 @@ export interface $URLListObject {
     downloaded?: boolean
 }
 
+export interface $ResponseHandlerArguments {
+    options?: RequestInit
+    handler?: (res: Response) => any
+}
+
 export interface $WaybackTimeMapObject {
     original: string
     mimetype: string
@@ -22,11 +27,20 @@ export interface $WaybackSparkLineObject {
     }
 }
 
-export interface $ResponseHandlerArgs {
-    options?: RequestInit
-    handler?: (res: Response) => any
-}
-
 export interface $WaybackCalendarCaptureByDay {
     items: [number, (string | number), number][]
+}
+
+export interface $WaybackDatabaseResourceObject {
+    path: string,
+    data: Buffer
+}
+
+export interface $WaybackDatabaseProgressObject {
+    path: string,
+    failure: number
+}
+
+export interface $WaybackDatabaseProgressDictionary {
+    [url: string]: number
 }
