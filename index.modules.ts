@@ -63,7 +63,7 @@ export function TryGetGoodPrefixDate(sparkline: $WaybackSparkLineObject) { // re
             }
         }
     }
-    if (best.year === 'none' || best.month === 'none' || best.month_captures === 0) return 'none';
+    if (best.year === 'none' || best.month === 'none' || best.month_captures === 0) return null;
     return best.year + best.month;
 }
 
@@ -123,7 +123,7 @@ export async function TryFindGoodCaptureURL(url: string, date_prefix: string) {
             return `https://web.archive.org/web/${date_prefix}${day[0]}/${url}`;
         }
     }
-    return 'none';
+    return null;
 }
 
 export async function GetWaybackSparkline(url: string, output = 'json', collection = 'web') {
@@ -138,6 +138,7 @@ export async function GetWaybackSparkline(url: string, output = 'json', collecti
 export async function RetryFailedRequest(url: string): Promise<Buffer<ArrayBufferLike> | null> {
     let sparkline: $WaybackSparkLineObject = await GetWaybackSparkline(url);
     let good_prefix = TryGetGoodPrefixDate(sparkline);
+    if (!good_prefix) return null;
     let good_url = await TryFindGoodCaptureURL(url, good_prefix);
     console.log(`[Bulk Downloader] Found Reported 2xx: ${good_url}...`);
     if (good_url) {

@@ -98,7 +98,7 @@ export class WaybackDatabaseInterface {
         this.GET_RESOURCE_ITEM = this.db.prepare('SELECT data FROM resources WHERE path IS ?');
         this.SET_RESOURCE_ITEM = this.db.prepare('INSERT OR IGNORE INTO resources VALUES (@path, @data)');
 
-        this.GET_TIMEMAP_LIST = this.db.prepare('SELECT * FROM timemap ORDER BY original ASC');
+        this.GET_TIMEMAP_LIST = this.db.prepare('SELECT * FROM timemap ORDER BY groupcount DESC');
         this.SET_TIMEMAP_ITEM = this.db.prepare('INSERT OR IGNORE INTO timemap VALUES (@original, @mimetype, @timestamp, @endtimestamp, @groupcount, @uniqcount)');
     }
 
@@ -169,7 +169,7 @@ export class WaybackDatabaseInterface {
             this.SetTimeMapList(timemap_list);
         }
 
-        return timemap_list;
+        return this.GET_TIMEMAP_LIST.all(); // sort
     }
 
     SetTimeMapList(timemap_list: $WaybackTimeMapObject[]) {
