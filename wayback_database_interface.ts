@@ -48,12 +48,10 @@ export class WaybackDatabaseInterface {
             return;
         }
 
-        if (!fs.existsSync('db')) fs.mkdirSync('db');
-
-        let filepath = `./db/${this.filename}.db`;
+        let filepath = `${this.filename}.db`;
         let already_exists = fs.existsSync(filepath);
 
-        this.db = new Database(`./db/${this.filename}.db`, this.verbose ? { verbose: this.logger } : {});
+        this.db = new Database(`${this.filename}.db`, this.verbose ? { verbose: this.logger } : {});
 
         !already_exists && this.logger(`[${this.filename}] DB CREATED`);
 
