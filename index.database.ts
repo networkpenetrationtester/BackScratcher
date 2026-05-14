@@ -1,7 +1,7 @@
 import fs from 'node:fs'
 import Database from 'better-sqlite3';
 import BetterSQLite3 from 'better-sqlite3';
-import type { $WaybackDatabaseProgressObject, $WaybackDatabaseResourceObject, $WaybackDatabaseProgressDictionary, $Logger, $WaybackDatbaseInterfaceArguments, $WaybackTimeMapObject, $URLListObject } from './index.types.ts';
+import type { /* $WaybackDatabaseProgressObject, */ $WaybackDatabaseResource, $WaybackDatabaseProgressDictionary, $Logger, $WaybackDatabaseInterfaceArguments, $WaybackAPITimeMap, $WaybackDatabaseTimeMap, $URLListObject, $WaybackDatabaseProgress } from './index.types.ts';
 import { GetWaybackTimemap } from './index.modules.ts';
 import path from 'node:path';
 
@@ -16,16 +16,16 @@ export class WaybackDatabaseInterface {
     private verbose;
     private logger: $Logger;
 
-    private GET_PROGRESS_LIST!: BetterSQLite3.Statement<$WaybackDatabaseProgressObject[], $WaybackDatabaseProgressObject>;
-    private SET_PROGRESS_ITEM!: BetterSQLite3.Statement<$WaybackDatabaseProgressObject[], never>;
+    private GET_PROGRESS_LIST!: BetterSQLite3.Statement<$WaybackDatabaseProgress[], $WaybackDatabaseProgress>;
+    private SET_PROGRESS_ITEM!: BetterSQLite3.Statement<$WaybackDatabaseProgress[], never>;
 
     private GET_RESOURCE_ITEM!: BetterSQLite3.Statement<string, Buffer>;
-    private SET_RESOURCE_ITEM!: BetterSQLite3.Statement<$WaybackDatabaseResourceObject[], never>;
+    private SET_RESOURCE_ITEM!: BetterSQLite3.Statement<$WaybackDatabaseResource[], never>;
 
-    private GET_TIMEMAP_LIST!: BetterSQLite3.Statement<$WaybackTimeMapObject[], $WaybackTimeMapObject>;
-    private SET_TIMEMAP_ITEM!: BetterSQLite3.Statement<$WaybackTimeMapObject[], never>;
+    private GET_TIMEMAP_LIST!: BetterSQLite3.Statement<$WaybackDatabaseTimeMap[], $WaybackDatabaseTimeMap>;
+    private SET_TIMEMAP_ITEM!: BetterSQLite3.Statement<$WaybackDatabaseTimeMap[], never>;
 
-    constructor(args?: $WaybackDatbaseInterfaceArguments) { // maybe loaded later, so name is optional
+    constructor(args?: $WaybackDatabaseInterfaceArguments) { // maybe loaded later, so name is optional
         if (args) {
             args.verbose && (this.verbose = args.verbose);
             args.logger && (this.logger = args.logger);
@@ -34,10 +34,11 @@ export class WaybackDatabaseInterface {
         }
         this.verbose ??= false;
         this.logger ??= console.log;
+        this.out_dir ??= '.';
         this.filename && this.Connect();
     }
 
-    Connect(args?: $WaybackDatbaseInterfaceArguments): BetterSQLite3.Database | undefined { // provide facility to switch active file ig
+    Connect(args?: $WaybackDatabaseInterfaceArguments): BetterSQLite3.Database | undefined { // provide facility to switch active file ig
         if (this.connected) this.Disconnect();
 
         if (args) {
@@ -52,13 +53,13 @@ export class WaybackDatabaseInterface {
             return;
         }
 
-        !fs.existsSync(this.out_dir ?? '.') && fs.mkdirSync(this.out_dir, { recursive: true });
-        let filepath = path.join(this.out_dir ?? '.', this.filename + '.db');
-        let db_exists = fs.existsSync(filepath);
+        !fs.existsSync(this.out_dir) && fs.mkdirSync(this.out_dir, { recursive: true });
+        let filepath = path.join(this.out_dir, this.filename + '.db');
+        let db_existed = fs.existsSync(filepath);
 
         this.db = new Database(filepath, this.verbose ? { verbose: this.logger } : {});
 
-        !db_exists && this.logger(`[${this.filename}] DB CREATED`);
+        !db_existed && this.logger(`[${this.filename}] DB CREATED`);
 
         this.connected = true;
 
@@ -66,7 +67,7 @@ export class WaybackDatabaseInterface {
         this.PrepareStatements();
         this.BuildProgressDictionary();
 
-        !db_exists && this.logger(`[${this.filename}] DB INITIALIZED`);
+        !db_existed && this.logger(`[${this.filename}] DB INITIALIZED`);
 
         return this.db;
     }
@@ -90,19 +91,17 @@ export class WaybackDatabaseInterface {
         }
 
         this.db.pragma('journal_mode = WAL');
-
         this.db.exec("CREATE TABLE IF NOT EXISTS 'resources' ('path' TEXT UNIQUE, 'data' BLOB, PRIMARY KEY('path'))");
-        this.db.exec("CREATE TABLE IF NOT EXISTS 'progress' ('path' TEXT UNIQUE, 'failure' NUMERIC, PRIMARY KEY('path'))"); // Implement status codes rather than boolean "failure"
-        this.db.exec("CREATE TABLE IF NOT EXISTS 'timemap' ('original' STRING UNIQUE, 'mimetype' STRING, 'timestamp' NUMERIC, 'endtimestamp' NUMERIC, 'groupcount' NUMERIC, 'uniqcount' NUMERIC, PRIMARY KEY('original'))"); // Implement progress keys into timemap?
+        this.db.exec("CREATE TABLE IF NOT EXISTS 'timemap' ('original' STRING UNIQUE, 'mimetype' STRING, 'timestamp' NUMERIC, 'endtimestamp' NUMERIC, 'groupcount' NUMERIC, 'uniqcount' NUMERIC, 'downloaded' NUMERIC, 'status' NUMERIC, PRIMARY KEY('original'))");
 
-        this.GET_PROGRESS_LIST = this.db.prepare('SELECT * FROM progress ORDER BY path ASC');
-        this.SET_PROGRESS_ITEM = this.db.prepare('INSERT OR IGNORE INTO progress VALUES (@path, @failure)');
+        this.GET_PROGRESS_LIST = this.db.prepare('SELECT original, downloaded, status FROM timemap');
+        this.SET_PROGRESS_ITEM = this.db.prepare('UPDATE timemap SET downloaded = @downloaded, status = @status WHERE original IS @original');
 
         this.GET_RESOURCE_ITEM = this.db.prepare('SELECT data FROM resources WHERE path IS ?');
         this.SET_RESOURCE_ITEM = this.db.prepare('INSERT OR IGNORE INTO resources VALUES (@path, @data)');
 
-        this.GET_TIMEMAP_LIST = this.db.prepare('SELECT * FROM timemap ORDER BY groupcount DESC');
-        this.SET_TIMEMAP_ITEM = this.db.prepare('INSERT OR IGNORE INTO timemap VALUES (@original, @mimetype, @timestamp, @endtimestamp, @groupcount, @uniqcount)');
+        this.GET_TIMEMAP_LIST = this.db.prepare('SELECT * FROM timemap ORDER BY groupcount DESC'); // Order most non-unique captures first (more likely to contain valid data at top and less likely at bottom)
+        this.SET_TIMEMAP_ITEM = this.db.prepare('INSERT OR IGNORE INTO timemap VALUES (@original, @mimetype, @timestamp, @endtimestamp, @groupcount, @uniqcount, @downloaded, @status)');
     }
 
     private BuildProgressDictionary() {
@@ -114,34 +113,35 @@ export class WaybackDatabaseInterface {
         this.progress_dictionary = {};
 
         for (let progress of this.GET_PROGRESS_LIST.all()) {
-            this.progress_dictionary[progress.path] = progress.failure;
+            if (progress.downloaded > -1) this.progress_dictionary[progress.original] = progress.status;
         }
     }
 
-    GetProgress(path: string) {
-        return {
-            exists: this.progress_dictionary[path] != null,
-            failure: this.progress_dictionary[path]
-        }
+    GetProgress(original: string) {
+        let status = this.progress_dictionary[original];
+        if (status != null) return status;
+        return -1;
     }
 
-    SetProgress(progress_obj: $WaybackDatabaseProgressObject) { // Implement status codes rather than boolean "failure"
+    SetProgress(progress_obj: $WaybackDatabaseProgress) {
         if (!this.connected) {
             this.logger(`[${this.filename}] DB NOT CONNECTED`);
             return;
         }
 
-        let check = this.GetProgress(progress_obj.path);
+        let status = this.GetProgress(progress_obj.original);
+        let exists = status !== -1;
+        let failure = exists && progress_obj.status !== 200;
 
-        if (!check.exists) {
+        if (!exists) {
             this.db.transaction(() => this.SET_PROGRESS_ITEM.run(progress_obj))();
-            this.logger(`[${this.filename}] Progress${progress_obj.failure ? ' (fail)' : ''}: ${progress_obj.path}`);
-            this.progress_dictionary[progress_obj.path] = progress_obj.failure;
+            this.logger(`[${this.filename}] Progress${failure ? ` [fail ${status}]` : ''}: ${progress_obj.original}`);
+            this.progress_dictionary[progress_obj.original] = progress_obj.status;
         } else {
-            this.logger(`[${this.filename}] Already Progressed${check.failure ? ' (fail)' : ''}: ${progress_obj.path}`);
+            this.logger(`[${this.filename}] Already Progressed ${failure ? `[fail ${status}]` : `[${status}]`}: ${progress_obj.original}`);
         }
 
-        return !check.exists && progress_obj.failure === 0;
+        return !exists && !failure;
     }
 
     GetResource(path: string) {
@@ -153,7 +153,7 @@ export class WaybackDatabaseInterface {
         return this.GET_RESOURCE_ITEM.pluck().get(path);
     }
 
-    SetResource(resource_obj: $WaybackDatabaseResourceObject) { // overhead from SetProgress
+    SetResource(resource_obj: $WaybackDatabaseResource) {
         if (!this.connected) {
             this.logger(`[${this.filename}] DB NOT CONNECTED`);
             return;
@@ -172,16 +172,16 @@ export class WaybackDatabaseInterface {
             this.SetTimeMapList(timemap_list);
         }
 
-        return this.GET_TIMEMAP_LIST.all(); // sort
+        return this.GET_TIMEMAP_LIST.all();
     }
 
-    SetTimeMapList(timemap_list: $WaybackTimeMapObject[]) {
+    SetTimeMapList(timemap_list: $WaybackDatabaseTimeMap[]) {
         for (let timemap_object of timemap_list) {
             this.db.transaction(() => this.SET_TIMEMAP_ITEM.run(timemap_object))();
         }
     }
 
-    async GetURLList(timemap?: $WaybackTimeMapObject[]) { // Allow subset of timemap to be turned into URL list...
+    async GetURLList(timemap?: $WaybackAPITimeMap[]) {
         timemap ??= await this.GetTimeMapList();
         let urllist = new Map<String, $URLListObject>();
 

@@ -1,9 +1,9 @@
-/******** MISC ********/
+//************* MISC *************//
 
 export type $Logger = ((message?: any, ...additionalArgs: any[]) => void);
 
 export interface $URLListObject {
-    query: string,
+    query: string
     wayback_url: string
 }
 
@@ -12,9 +12,9 @@ export interface $ResponseHandlerArguments {
     handler?: (res: Response) => any
 }
 
-/******** WAYBACK API ********/
+//************* WAYBACK API *************//
 
-export interface $WaybackTimeMapObject {
+export type $WaybackAPITimeMap = {
     original: string
     mimetype: string
     timestamp: number
@@ -23,36 +23,39 @@ export interface $WaybackTimeMapObject {
     uniqcount: number
 }
 
-export interface $WaybackSparkLineObject {
+export interface $WaybackAPISparkLine {
     years: { [key: string]: number[] }
-    first_ts: string,
-    last_ts: string,
+    first_ts: string
+    last_ts: string
     status: {
         [key: string]: string
     }
 }
 
-export interface $WaybackCalendarCaptureByDay {
+export interface $WaybackAPICalendarCaptureDay {
     items: [number, (string | number), number][]
 }
 
-/******** WAYBACK DATABASE INTERFACE ********/
+//************* WAYBACK DATABASE INTERFACE *************//
 
-export interface $WaybackDatabaseResourceObject {
-    path: string,
+export interface $WaybackDatabaseResource {
+    path: string
     data: Buffer
 }
 
-export interface $WaybackDatabaseProgressObject {
-    path: string,
-    failure: number // Implement status code rather than boolean
+export type $WaybackDatabaseProgress = {
+    status: number
+    downloaded: -1 | 0 | 1
+    original: string
 }
+
+export type $WaybackDatabaseTimeMap = $WaybackDatabaseProgress & $WaybackAPITimeMap
 
 export interface $WaybackDatabaseProgressDictionary {
-    [url: string]: number // Implement status code rather than boolean, Implement path rather than entire URL?
+    [url: string]: number
 }
 
-export interface $WaybackDatbaseInterfaceArguments {
+export interface $WaybackDatabaseInterfaceArguments {
     url?: URL
     verbose?: boolean
     logger?: $Logger
