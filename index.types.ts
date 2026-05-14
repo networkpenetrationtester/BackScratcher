@@ -1,9 +1,10 @@
-//MISC
+/******** MISC ********/
+
+export type $Logger = ((message?: any, ...additionalArgs: any[]) => void);
 
 export interface $URLListObject {
-    query: number, // can be querystring
-    wayback_url: string,
-    downloaded?: boolean
+    query: string,
+    wayback_url: string
 }
 
 export interface $ResponseHandlerArguments {
@@ -11,7 +12,7 @@ export interface $ResponseHandlerArguments {
     handler?: (res: Response) => any
 }
 
-// WAYBACK API
+/******** WAYBACK API ********/
 
 export interface $WaybackTimeMapObject {
     original: string
@@ -35,7 +36,7 @@ export interface $WaybackCalendarCaptureByDay {
     items: [number, (string | number), number][]
 }
 
-// WAYBACK DATABASE INTERFACE
+/******** WAYBACK DATABASE INTERFACE ********/
 
 export interface $WaybackDatabaseResourceObject {
     path: string,
@@ -44,17 +45,16 @@ export interface $WaybackDatabaseResourceObject {
 
 export interface $WaybackDatabaseProgressObject {
     path: string,
-    failure: number // 1 for failure
+    failure: number // Implement status code rather than boolean
 }
 
 export interface $WaybackDatabaseProgressDictionary {
-    [url: string]: number // 1 for failure
+    [url: string]: number // Implement status code rather than boolean, Implement path rather than entire URL?
 }
-
-export type $WaybackDatbaseInterfaceLogger = ((message?: any, ...additionalArgs: any[]) => void);
 
 export interface $WaybackDatbaseInterfaceArguments {
     url?: URL
     verbose?: boolean
-    logger?: $WaybackDatbaseInterfaceLogger
+    logger?: $Logger
+    output_path?: string
 }

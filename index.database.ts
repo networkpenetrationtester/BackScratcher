@@ -1,7 +1,7 @@
 import fs from 'node:fs'
 import Database from 'better-sqlite3';
 import BetterSQLite3 from 'better-sqlite3';
-import type { $WaybackDatabaseProgressObject, $WaybackDatabaseResourceObject, $WaybackDatabaseProgressDictionary, $WaybackDatbaseInterfaceLogger, $WaybackDatbaseInterfaceArguments, $WaybackTimeMapObject } from './index.types.ts';
+import type { $WaybackDatabaseProgressObject, $WaybackDatabaseResourceObject, $WaybackDatabaseProgressDictionary, $Logger, $WaybackDatbaseInterfaceArguments, $WaybackTimeMapObject, $URLListObject } from './index.types.ts';
 import { GetWaybackTimemap } from './index.modules.ts';
 
 export class WaybackDatabaseInterface {
@@ -12,7 +12,7 @@ export class WaybackDatabaseInterface {
     private url!: URL;
     private filename!: string;
     private verbose;
-    private logger: $WaybackDatbaseInterfaceLogger;
+    private logger: $Logger;
 
     private GET_PROGRESS_LIST!: BetterSQLite3.Statement<$WaybackDatabaseProgressObject[], $WaybackDatabaseProgressObject>;
     private SET_PROGRESS_ITEM!: BetterSQLite3.Statement<$WaybackDatabaseProgressObject[], never>;
@@ -84,11 +84,11 @@ export class WaybackDatabaseInterface {
             return;
         }
 
-        // this.db.pragma('journal_mode = WAL');
+        this.db.pragma('journal_mode = WAL');
 
         this.db.exec("CREATE TABLE IF NOT EXISTS 'resources' ('path' TEXT UNIQUE, 'data' BLOB, PRIMARY KEY('path'))");
-        this.db.exec("CREATE TABLE IF NOT EXISTS 'progress' ('path' TEXT UNIQUE, 'failure' NUMERIC, PRIMARY KEY('path'))");
-        this.db.exec("CREATE TABLE IF NOT EXISTS 'timemap' ('original' STRING UNIQUE, 'mimetype' STRING, 'timestamp' NUMERIC, 'endtimestamp' NUMERIC, 'groupcount' NUMERIC, 'uniqcount' NUMERIC, PRIMARY KEY('original'))");
+        this.db.exec("CREATE TABLE IF NOT EXISTS 'progress' ('path' TEXT UNIQUE, 'failure' NUMERIC, PRIMARY KEY('path'))"); // Implement status codes rather than boolean "failure"
+        this.db.exec("CREATE TABLE IF NOT EXISTS 'timemap' ('original' STRING UNIQUE, 'mimetype' STRING, 'timestamp' NUMERIC, 'endtimestamp' NUMERIC, 'groupcount' NUMERIC, 'uniqcount' NUMERIC, PRIMARY KEY('original'))"); // Implement progress keys into timemap?
 
         this.GET_PROGRESS_LIST = this.db.prepare('SELECT * FROM progress ORDER BY path ASC');
         this.SET_PROGRESS_ITEM = this.db.prepare('INSERT OR IGNORE INTO progress VALUES (@path, @failure)');
@@ -120,7 +120,7 @@ export class WaybackDatabaseInterface {
         }
     }
 
-    SetProgress(progress_obj: $WaybackDatabaseProgressObject) {
+    SetProgress(progress_obj: $WaybackDatabaseProgressObject) { // Implement status codes rather than boolean "failure"
         if (!this.connected) {
             this.logger(`[${this.filename}] DB NOT CONNECTED`);
             return;
@@ -176,28 +176,20 @@ export class WaybackDatabaseInterface {
         }
     }
 
-    async GetURLList() {
-        let timemap = await this.GetTimeMapList();
-        let latest_resources = new Map<String, { version: number, wayback_url: string, downloaded?: Boolean }>();
+    async GetURLList(timemap?: $WaybackTimeMapObject[]) { // Allow subset of timemap to be turned into URL list...
+        timemap ??= await this.GetTimeMapList();
+        let urllist = new Map<String, $URLListObject>();
 
-        for (let t of timemap) {
+        for (let t of timemap) { // Maybe allow this to be user specified?
             let wayback_url = `https://web.archive.org/web/${t.timestamp}/${t.original}`;
-            let parts = t.original.split('?v=');
-            let [url, version] = [parts[0], parseInt(parts[1])];
-            if (isNaN(version)) {
-                latest_resources.set(url, {
-                    version: 0,
-                    wayback_url: wayback_url
-                });
-                continue;
-            } else if (version > (latest_resources.get(url)?.version ?? -1)) {
-                latest_resources.set(url, {
-                    version: version,
-                    wayback_url: wayback_url
-                });
-            }
+            let parts = t.original.split('?');
+            let [url, query] = parts;
+            urllist.set(url, {
+                query: query,
+                wayback_url: wayback_url
+            });
         }
 
-        return Array.from(latest_resources.values());
+        return Array.from(urllist.values());
     }
 }

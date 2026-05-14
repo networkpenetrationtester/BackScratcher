@@ -1,7 +1,7 @@
-import { BulkDownloader } from "./index.modules.ts";
 import rl from 'node:readline';
 import { URL } from "node:url";
-import { WaybackDatabaseInterface } from "./wayback_database_interface.ts";
+import { WaybackDatabaseInterface } from "./index.database.ts";
+import { BulkDownloader } from './index.modules.ts';
 
 async function main() {
     const io = rl.createInterface(process.stdin, process.stdout);
@@ -31,7 +31,7 @@ async function main() {
             url: target_url
         });
 
-        // await BulkDownloader(wb_db_int);
+        await BulkDownloader(wb_db_int);
     }
 }
 
