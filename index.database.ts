@@ -3,6 +3,7 @@ import Database from 'better-sqlite3';
 import BetterSQLite3 from 'better-sqlite3';
 import type { $WaybackDatabaseProgressObject, $WaybackDatabaseResourceObject, $WaybackDatabaseProgressDictionary, $Logger, $WaybackDatbaseInterfaceArguments, $WaybackTimeMapObject, $URLListObject } from './index.types.ts';
 import { GetWaybackTimemap } from './index.modules.ts';
+import path from 'node:path';
 
 export class WaybackDatabaseInterface {
     private db!: BetterSQLite3.Database;
@@ -10,6 +11,7 @@ export class WaybackDatabaseInterface {
     private connected = false;
 
     private url!: URL;
+    private out_dir!: string;
     private filename!: string;
     private verbose;
     private logger: $Logger;
@@ -28,6 +30,7 @@ export class WaybackDatabaseInterface {
             args.verbose && (this.verbose = args.verbose);
             args.logger && (this.logger = args.logger);
             args.url && (this.url = args.url, this.filename = args.url.host);
+            args.out_dir && (this.out_dir = args.out_dir);
         }
         this.verbose ??= false;
         this.logger ??= console.log;
@@ -41,6 +44,7 @@ export class WaybackDatabaseInterface {
             args.verbose && (this.verbose = args.verbose);
             args.logger && (this.logger = args.logger);
             args.url && (this.url = args.url, this.filename = args.url.host);
+            args.out_dir && (this.out_dir = args.out_dir);
         }
 
         if (!this.filename) {
@@ -48,12 +52,13 @@ export class WaybackDatabaseInterface {
             return;
         }
 
-        let filepath = `${this.filename}.db`;
-        let already_exists = fs.existsSync(filepath);
+        !fs.existsSync(this.out_dir ?? '.') && fs.mkdirSync(this.out_dir, { recursive: true });
+        let filepath = path.join(this.out_dir ?? '.', this.filename + '.db');
+        let db_exists = fs.existsSync(filepath);
 
-        this.db = new Database(`${this.filename}.db`, this.verbose ? { verbose: this.logger } : {});
+        this.db = new Database(filepath, this.verbose ? { verbose: this.logger } : {});
 
-        !already_exists && this.logger(`[${this.filename}] DB CREATED`);
+        !db_exists && this.logger(`[${this.filename}] DB CREATED`);
 
         this.connected = true;
 
@@ -61,7 +66,7 @@ export class WaybackDatabaseInterface {
         this.PrepareStatements();
         this.BuildProgressDictionary();
 
-        !already_exists && this.logger(`[${this.filename}] DB INITIALIZED`);
+        !db_exists && this.logger(`[${this.filename}] DB INITIALIZED`);
 
         return this.db;
     }
@@ -181,7 +186,7 @@ export class WaybackDatabaseInterface {
         let urllist = new Map<String, $URLListObject>();
 
         for (let t of timemap) { // Maybe allow this to be user specified?
-            let wayback_url = `https://web.archive.org/web/${t.timestamp}/${t.original}`;
+            let wayback_url = `https://web.archive.org/web/${t.timestamp}id_/${t.original}`; // FUCK almost shot myself thanks Sally. (What a good boooyyyyyy!!!!!!!)
             let parts = t.original.split('?');
             let [url, query] = parts;
             urllist.set(url, {

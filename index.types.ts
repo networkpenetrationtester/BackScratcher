@@ -56,5 +56,5 @@ export interface $WaybackDatbaseInterfaceArguments {
     url?: URL
     verbose?: boolean
     logger?: $Logger
-    output_path?: string
+    out_dir?: string
 }
