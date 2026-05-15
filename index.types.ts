@@ -1,5 +1,7 @@
 //************* MISC *************//
 
+import { AxiosRequestConfig, AxiosResponse } from "axios";
+
 export type $Logger = ((message?: any, ...additionalArgs: any[]) => void);
 
 export interface $URLListObject {
@@ -8,8 +10,8 @@ export interface $URLListObject {
 }
 
 export interface $ResponseHandlerArguments {
-    options?: RequestInit
-    handler?: (res: Response) => any
+    options?: AxiosRequestConfig
+    handler?: (res: AxiosResponse) => any
 }
 
 //************* WAYBACK API *************//
@@ -60,4 +62,5 @@ export interface $WaybackDatabaseInterfaceArguments {
     verbose?: boolean
     logger?: $Logger
     out_dir?: string
+    maintenance?: boolean // avoid generating statements immediately
 }

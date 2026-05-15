@@ -1,6 +1,7 @@
 import type { $WaybackAPITimeMap, $ResponseHandlerArguments, $WaybackAPISparkLine, $WaybackAPICalendarCaptureDay, $WaybackDatabaseTimeMap } from './index.types.ts';
 import { WaybackDatabaseInterface } from './index.database.ts';
-import { resourceLimits } from 'node:worker_threads';
+import axios from 'axios';
+import type { AxiosRequestConfig, AxiosResponse } from 'axios';
 
 export async function Delay(ms: number) {
     console.log(`Waiting: ${ms}ms...`);
@@ -9,18 +10,21 @@ export async function Delay(ms: number) {
 
 export const wayback_regex = /(?!(https:\/\/web.archive.org))(?<collection>\/web\/[0-9]{14}id_\/)(?<resource>.*)/;
 
-export const wayback_fetch_options: RequestInit = {
+export const wayback_axios_options: AxiosRequestConfig = {
     headers: {
         'accept': '*/*',
         'cache-control': 'no-cache',
         'pragma': 'no-cache'
     },
-    referrer: 'https://web.archive.org/', // without this lie it doesn't work :3
-    method: 'GET'
+    responseType: 'arraybuffer',
+    fetchOptions: {
+        referrer: 'https://web.archive.org/', // without this lie it doesn't work :3
+        method: 'GET'
+    }
 }
 
-export const wayback_fetch_handler = async (res: Response) => {
-    let r = await res.text();
+export const wayback_fetch_handler = async (res: AxiosResponse) => {
+    let r = res.data;
     try {
         return JSON.parse(r);
     } catch {
@@ -29,14 +33,19 @@ export const wayback_fetch_handler = async (res: Response) => {
 }
 
 export async function FetchWrapper(url: string, args: $ResponseHandlerArguments): Promise<any> {
-    let res = await fetch(url, args.options ?? {});
-    if (res.status !== 200) throw new Error(`${res.status}_${res.statusText.replace(/ /g, '_')}: ${res.url}`);
-    return args.handler ? await args.handler(res) : res;
+    return await axios.get(url, args.options ?? {}).then(res => args.handler ? args.handler(res) : res)
+        .catch((reason) => {
+            switch (reason?.status) {
+                case 429: throw new Error('Rate Limited');
+                case 500: throw new Error('Interal Server Error');
+                case 503: throw new Error('Service Unavailable');
+            }
+        });
 }
 
 export async function GetWaybackHost(url: string) {
     let data = await FetchWrapper(`https://web.archive.org/__wb/search/host?q=${url}`, {
-        options: wayback_fetch_options,
+        options: wayback_axios_options,
         handler: wayback_fetch_handler
     });
     return data;
@@ -44,7 +53,7 @@ export async function GetWaybackHost(url: string) {
 
 export async function GetWaybackTimemap(url: string, output = 'json', match_type = 'prefix', collapse = 'urlkey', filter_list = 'original,mimetype,timestamp,endtimestamp,groupcount,uniqcount', filter_string = '!statuscode:[45]..', limit = 10000): Promise<$WaybackDatabaseTimeMap[]> {
     return await FetchWrapper(`https://web.archive.org/web/timemap/json?url=${url}&matchType=${match_type}&collapse=${collapse}&output=${output}&fl=${filter_list}&filter=${filter_string}&limit=${limit}&_=${Date.now()}`, {
-        options: wayback_fetch_options,
+        options: wayback_axios_options,
         handler: async (res) => {
             let supra: $WaybackAPITimeMap[] = await wayback_fetch_handler(res);
             /*
@@ -84,7 +93,7 @@ export async function GetWaybackTimemap(url: string, output = 'json', match_type
 
 export async function GetWaybackSparkline(url: string, output = 'json', collection = 'web') {
     let data: $WaybackAPISparkLine = await FetchWrapper(`https://web.archive.org/__wb/sparkline?output=${output}&url=${url}&collection=${collection}`, {
-        options: wayback_fetch_options,
+        options: wayback_axios_options,
         handler: wayback_fetch_handler
     });
 
@@ -93,7 +102,7 @@ export async function GetWaybackSparkline(url: string, output = 'json', collecti
 
 export async function GetWaybackCalendarCapture(url: string, date: string, group_by: 'day' | 'collection' | 'none' = 'none') {
     let data = await FetchWrapper(`https://web.archive.org/__wb/calendarcaptures/2?url=${url}&date=${date}${group_by != 'none' ? '&groupby=' + group_by : ''}`, {
-        options: wayback_fetch_options,
+        options: wayback_axios_options,
         handler: wayback_fetch_handler
     });
     return data;
@@ -160,10 +169,11 @@ export async function RetryFailedRequest(url: string) { // Implement retries cou
     console.log(`[RetryFailedRequest] Found Reported 2xx: ${good_url}...`);
 
     let res: { resource: Buffer | null, status: number } | null = await FetchWrapper(url, {
-        handler: async (res) => {
+        options: wayback_axios_options,
+        handler: res => {
             return {
                 status: res.status,
-                resource: Buffer.from(await res.arrayBuffer())
+                resource: Buffer.from(res.data)
             }
         }
     }).catch(async (e) => {
@@ -185,7 +195,7 @@ export async function BulkDownloader(wayback_db_interface: WaybackDatabaseInterf
 
         if (!parsed_orig_url || !original_url) continue;
 
-        let progress_status = wayback_db_interface.GetProgress(original_url);
+        let progress_status = wayback_db_interface.GetProgressItem(original_url);
         let progress_exists = progress_status !== -1;
         let progress_failure = progress_exists && progress_status !== 200;
 
@@ -197,10 +207,11 @@ export async function BulkDownloader(wayback_db_interface: WaybackDatabaseInterf
         console.log(`[Bulk Downloader] Downloading: ${wayback_url}...`);
 
         let res: { resource: Buffer | null, status: number } | null = await FetchWrapper(wayback_url, {
-            handler: async (res) => {
+            options: wayback_axios_options,
+            handler: res => {
                 return {
                     status: res.status,
-                    resource: Buffer.from(await res.arrayBuffer())
+                    resource: Buffer.from(res.data)
                 }
             }
         }).catch(async (e) => {
@@ -212,10 +223,10 @@ export async function BulkDownloader(wayback_db_interface: WaybackDatabaseInterf
         let { resource, status } = res ?? { resource: null, status: 404 };
 
         if (resource instanceof Buffer) {
-            if (wayback_db_interface.SetProgress({ original: original_url, downloaded: 1, status: status })) {
-                wayback_db_interface.SetResource({ path: parsed_orig_url.pathname + parsed_orig_url.search, data: resource });
+            if (wayback_db_interface.SetProgressItem({ original: original_url, downloaded: 1, status: status })) { // something broke in progress
+                wayback_db_interface.SetResourceItem({ path: parsed_orig_url.pathname + parsed_orig_url.search, data: resource });
             }
-        } else wayback_db_interface.SetProgress({
+        } else wayback_db_interface.SetProgressItem({
             original: parsed_orig_url.href,
             status: status,
             downloaded: 0
