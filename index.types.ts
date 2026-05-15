@@ -1,6 +1,6 @@
 //************* MISC *************//
 
-import { AxiosRequestConfig, AxiosResponse } from "axios";
+import type { AxiosRequestConfig, AxiosResponse } from "axios";
 
 export type $Logger = ((message?: any, ...additionalArgs: any[]) => void);
 

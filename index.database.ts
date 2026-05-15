@@ -91,7 +91,7 @@ export class WaybackDatabaseInterface {
         return this.db;
     }
 
-    private PrepareStatements() {
+    PrepareStatements() {
         if (!this.connected) {
             this.logger(`[${this.filename}] DB NOT CONNECTED`);
             return;
@@ -113,7 +113,7 @@ export class WaybackDatabaseInterface {
         this.SET_TIMEMAP_ITEM = this.db.prepare(`INSERT OR REPLACE INTO timemap VALUES (@original, @mimetype, @timestamp, @endtimestamp, @groupcount, @uniqcount, @downloaded, @status);`); // IGNORE/REPLACE
     }
 
-    private BuildProgressDictionary() {
+    BuildProgressDictionary() {
         if (!this.connected) {
             this.logger(`[${this.filename}] DB NOT CONNECTED`);
             return;

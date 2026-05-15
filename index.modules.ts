@@ -4,7 +4,7 @@ import axios from 'axios';
 import type { AxiosRequestConfig, AxiosResponse } from 'axios';
 
 export async function Delay(ms: number) {
-    console.log(`Waiting: ${ms/1000}s...`);
+    console.log(`Waiting: ${ms / 1000}s...`);
     return await new Promise((resolve) => { setTimeout(resolve, ms) });
 }
 
