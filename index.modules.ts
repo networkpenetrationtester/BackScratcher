@@ -4,7 +4,7 @@ import axios from 'axios';
 import type { AxiosRequestConfig, AxiosResponse } from 'axios';
 
 export async function Delay(ms: number) {
-    console.log(`Waiting: ${ms}ms...`);
+    console.log(`Waiting: ${ms/1000}s...`);
     return await new Promise((resolve) => { setTimeout(resolve, ms) });
 }
 
@@ -34,9 +34,13 @@ export const wayback_fetch_handler = async (res: AxiosResponse) => {
 
 export async function FetchWrapper(url: string, args: $ResponseHandlerArguments): Promise<any> {
     return await axios.get(url, args.options ?? {}).then(res => args.handler ? args.handler(res) : res)
-        .catch((reason) => {
+        .catch(async (reason) => {
             switch (reason?.status) {
-                case 429: throw new Error('Rate Limited');
+                case 429: {
+                    console.log(`[FetchWrapper] Rate Limited...`);
+                    await Delay(30000);
+                    return await FetchWrapper(url, args);
+                }
                 case 500: throw new Error('Interal Server Error');
                 case 503: throw new Error('Service Unavailable');
             }
