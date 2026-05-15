@@ -79,7 +79,7 @@ export class WaybackDatabaseInterface {
         this.db.close();
         this.progress_dictionary = {};
         this.connected = false;
-        this.logger(`[${this.filename}] DB DISCONNECTED`);
+        this.logger(`[${this.filename}] DB DISCONNECTED${this.maintenance ? '(MAINTENANCE)' : ''}`);
     }
 
     GetDB(): BetterSQLite3.Database | undefined {
@@ -97,7 +97,9 @@ export class WaybackDatabaseInterface {
             return;
         }
 
-        this.db.pragma(`journal_mode = WAL`);
+        this.db.pragma(`journal_mode = WAL;`);
+        this.db.pragma(`optimize;`)
+
         this.db.exec(`CREATE TABLE IF NOT EXISTS resources (path TEXT UNIQUE, data BLOB, PRIMARY KEY(path));`);
         this.db.exec(`CREATE TABLE IF NOT EXISTS timemap (original STRING UNIQUE, mimetype STRING, timestamp NUMERIC, endtimestamp NUMERIC, groupcount INTEGER, uniqcount INTEGER, downloaded INTEGER, status INTEGER, PRIMARY KEY(original));`);
 
@@ -105,9 +107,9 @@ export class WaybackDatabaseInterface {
         this.SET_PROGRESS_ITEM = this.db.prepare(`UPDATE timemap SET downloaded = @downloaded, status = @status WHERE original IS @original;`);
 
         this.GET_RESOURCE_ITEM = this.db.prepare(`SELECT data FROM resources WHERE path IS ?;`);
-        this.SET_RESOURCE_ITEM = this.db.prepare(`INSERT OR REPLACE INTO resources VALUES (@path, @data);`); // IGNORE/REPLACE
+        this.SET_RESOURCE_ITEM = this.db.prepare(`INSERT OR REPLACE INTO resources VALUES (@path, @data);`);
 
-        this.GET_TIMEMAP_LIST = this.db.prepare(`SELECT * FROM timemap ORDER BY groupcount DESC;`); // Order most non-unique captures first (more likely to contain valid data at top and less likely at bottom)
+        this.GET_TIMEMAP_LIST = this.db.prepare(`SELECT * FROM timemap ORDER BY groupcount DESC;`); // Order least unique captures first (more likely to contain valid data at top and less likely at bottom)
         this.SET_TIMEMAP_ITEM = this.db.prepare(`INSERT OR REPLACE INTO timemap VALUES (@original, @mimetype, @timestamp, @endtimestamp, @groupcount, @uniqcount, @downloaded, @status);`); // IGNORE/REPLACE
     }
 
